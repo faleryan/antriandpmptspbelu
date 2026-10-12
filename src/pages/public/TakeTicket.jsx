@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useSettings } from '../../context/Settings.jsx'
 import { useQueue } from '../../hooks/useQueue'
@@ -11,7 +11,8 @@ import AgencyLogo from '../../components/AgencyLogo.jsx'
 export default function TakeTicket() {
   const { settings: s } = useSettings()
   const { tickets, services, agencies, loading } = useQueue()
-  const [agencyId, setAgencyId] = useState('')
+  const [params] = useSearchParams()
+  const [agencyId, setAgencyId] = useState(params.get('instansi') || '')
   const [sid, setSid] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')

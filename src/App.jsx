@@ -2,7 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { configured } from './lib/supabase'
 import { RequireRole } from './context/Auth.jsx'
 import PublicLayout from './components/PublicLayout.jsx'
-import Home from './pages/public/Home.jsx'
+import Landing from './pages/public/Landing.jsx'
+import Dashboard from './pages/public/Dashboard.jsx'
 import TakeTicket from './pages/public/TakeTicket.jsx'
 import Track from './pages/public/Track.jsx'
 import GuestBook from './pages/public/GuestBook.jsx'
@@ -38,7 +39,8 @@ export default function App() {
   return (
     <Routes>
       <Route element={<PublicLayout />}>
-        <Route index element={<Home />} />
+        <Route index element={<Landing />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="antrian" element={<TakeTicket />} />
         <Route path="status" element={<Track />} />
         <Route path="status/:code" element={<Track />} />

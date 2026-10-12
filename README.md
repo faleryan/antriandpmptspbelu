@@ -20,7 +20,8 @@ Jalankan **`supabase/update-v2-instansi-rekap.sql`** sekali di Supabase → SQL 
 
 | Alamat | Untuk | Keterangan |
 |---|---|---|
-| `/` | Publik | Beranda: papan antrian live, layanan, kartu info, promosi, berita, kontak |
+| `/` | Publik | Beranda: hero (label, judul dengan kata berganti, gambar gedung), kartu pintasan, logo instansi, berita |
+| `/dashboard` | Publik | Dashboard antrian: papan "sedang dipanggil", layanan per instansi, kartu info, promosi, teks berjalan |
 | `/antrian` | Publik | Ambil nomor antrian online |
 | `/status/A-001` | Publik | Pantau posisi nomor |
 | `/buku-tamu` | Publik | Isi buku tamu, bisa sekaligus ambil nomor |
@@ -68,6 +69,8 @@ Buka `/login` → **Daftar**. **Pengguna pertama yang mendaftar otomatis menjadi
 **Instansi & layanan:** setiap instansi punya logo (unggah PNG persegi berlatar putih/transparan). Kode layanan harus unik di semua instansi karena menjadi awalan nomor (A-001, B-001, …). Loket bisa diatur melayani satu layanan, semua layanan satu instansi, atau semua layanan.
 
 **Rekap layanan:** pilih Harian (per tanggal dalam satu bulan), Bulanan (Jan–Des), Triwulan (TW I–IV), atau Tahunan (beberapa tahun). Tabel menampilkan jumlah per layanan dikelompokkan per instansi dengan subtotal dan total, ditambah rincian online/offline, selesai, dilewati, dibatalkan, persentase selesai, rata-rata waktu tunggu dan waktu layanan. Bisa disaring per instansi, diunduh CSV (terbuka di Excel), atau dicetak.
+
+**Beranda & latar:** di **Admin → Tampilan situs** atur label, judul, kata yang berganti (dipisah koma), slogan, warna latar dan pola titik, atau unggah **foto latar penuh**. Unggah juga **gambar gedung** — paling bagus foto gedung berformat PNG tanpa latar, lebar ±1600 px. Selama belum diunggah, beranda memakai ilustrasi gedung bawaan yang papan namanya mengikuti nama instansi. Kartu pintasan (maksimal 4) bisa diubah judul, tombol, warna, tautan (halaman situs atau alamat luar, misalnya formulir survei), dan gambarnya. Tidak perlu menjalankan SQL apa pun untuk fitur ini.
 
 **Admin:** isi beranda publik di **Tampilan situs**, unggah poster/video di **Media promosi** (atau tempel tautan YouTube), tulis **Berita**, dan atur **Layanan & loket**. Perubahan langsung muncul di situs dan layar antrian tanpa memuat ulang.
 

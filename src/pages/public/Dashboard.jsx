@@ -8,17 +8,13 @@ import { fmtDate } from '../../lib/util'
 import { groupServices } from '../../lib/agency'
 import AgencyLogo from '../../components/AgencyLogo.jsx'
 
-export default function Home() {
+// Dashboard publik: papan antrian live, layanan per instansi, kartu info, dan promosi.
+export default function Dashboard() {
   const { settings: s } = useSettings()
   const { tickets, services, counters, agencies } = useQueue()
-  const [posts, setPosts] = useState([])
   const [promo, setPromo] = useState([])
 
   useEffect(() => {
-    supabase.from('posts')
-      .select('id,title,slug,category,excerpt,cover_url,published_at')
-      .eq('published', true).order('published_at', { ascending: false }).limit(6)
-      .then(({ data }) => setPosts(data || []))
     supabase.from('promo_media').select('*').eq('active', true).order('sort')
       .then(({ data }) => setPromo(data || []))
   }, [])
@@ -32,6 +28,11 @@ export default function Home() {
 
   return (
     <>
+      {s.running_text && (
+        <div className="ticker" aria-label="Pengumuman">
+          <div className="ticker-in"><span>{s.running_text}</span></div>
+        </div>
+      )}
       <section className="hero">
         <div className="container hero-in">
           <div className="hero-copy">
@@ -115,39 +116,6 @@ export default function Home() {
           </section>
         )}
 
-        {sec.news && (
-          <section className="section">
-            <div className="section-head"><h2>Berita & pengumuman</h2><Link to="/berita">Semua berita →</Link></div>
-            {posts.length === 0
-              ? <div className="card muted">Belum ada berita yang diterbitkan.</div>
-              : (
-                <div className="news-grid">
-                  {posts.map((p) => (
-                    <Link key={p.id} className="card news-card" to={`/berita/${p.slug}`}>
-                      <div className="news-cover" style={p.cover_url ? { backgroundImage: `url(${p.cover_url})` } : undefined} />
-                      <div className="news-body">
-                        <span className="news-meta">{p.category} · {fmtDate(p.published_at)}</span>
-                        <h3>{p.title}</h3>
-                        {p.excerpt && <p className="muted">{p.excerpt}</p>}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-          </section>
-        )}
-
-        {sec.contact && (s.address || s.phone || s.email || s.open_hours) && (
-          <section className="section">
-            <div className="section-head"><h2>Hubungi kami</h2></div>
-            <div className="contact-grid">
-              {s.address && <div className="card"><b>Alamat</b>{s.address}</div>}
-              {s.phone && <div className="card"><b>Telepon</b>{s.phone}</div>}
-              {s.email && <div className="card"><b>Email</b>{s.email}</div>}
-              {s.open_hours && <div className="card"><b>Jam layanan</b>{s.open_hours}</div>}
-            </div>
-          </section>
-        )}
       </div>
     </>
   )
