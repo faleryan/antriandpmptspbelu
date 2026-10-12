@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQueue } from '../../hooks/useQueue'
 import { STATUS, fmtTime, waitingAhead } from '../../lib/util'
+import { agencyOf } from '../../lib/agency'
+import AgencyLogo from '../../components/AgencyLogo.jsx'
 
 // "a1", "A 1", "A-001" -> "A-001"
 const normalize = (v = '') => {
@@ -12,7 +14,7 @@ const normalize = (v = '') => {
 export default function Track() {
   const { code: param } = useParams()
   const nav = useNavigate()
-  const { tickets, services, counters, loading } = useQueue()
+  const { tickets, services, counters, agencies, loading } = useQueue()
   const [input, setInput] = useState(() => {
     if (param) return param
     try { return localStorage.getItem('myTicket') || '' } catch { return '' }
@@ -51,9 +53,13 @@ export default function Track() {
 
         {t && (
           <div className="card stack" aria-live="polite">
-            <div className="row">
+            <div className="row" style={{ flexWrap: 'nowrap' }}>
+              <AgencyLogo agency={agencyOf(svc, agencies)} size={44} />
+              <div style={{ flex: 1 }}>
+                <b>{agencyOf(svc, agencies).name}</b><br />
+                <span className="muted">{svc?.name}</span>
+              </div>
               <span className={`badge badge-${t.status}`}>{STATUS[t.status]}</span>
-              <span className="muted">{svc?.name}</span>
             </div>
             <div className="ticket-code" style={{ textAlign: 'center' }}>{t.code}</div>
             <p style={{ textAlign: 'center', fontWeight: 600 }}>{message}</p>

@@ -5,10 +5,12 @@ import { useSettings } from '../../context/Settings.jsx'
 import { useQueue } from '../../hooks/useQueue'
 import PromoPlayer from '../../components/PromoPlayer.jsx'
 import { fmtDate } from '../../lib/util'
+import { groupServices } from '../../lib/agency'
+import AgencyLogo from '../../components/AgencyLogo.jsx'
 
 export default function Home() {
   const { settings: s } = useSettings()
-  const { tickets, services, counters } = useQueue()
+  const { tickets, services, counters, agencies } = useQueue()
   const [posts, setPosts] = useState([])
   const [promo, setPromo] = useState([])
 
@@ -23,7 +25,7 @@ export default function Home() {
 
   const sec = s.sections
   const activeCounters = counters.filter((c) => c.active)
-  const activeServices = services.filter((x) => x.active)
+  const groups = groupServices(agencies, services)
   const waiting = tickets.filter((t) => t.status === 'waiting').length
   const done = tickets.filter((t) => t.status === 'done').length
   const current = (c) => tickets.find((t) => t.counter_id === c.id && ['called', 'serving'].includes(t.status))
@@ -65,20 +67,30 @@ export default function Home() {
       </section>
 
       <div className="container">
-        {sec.services && activeServices.length > 0 && (
+        {sec.services && groups.length > 0 && (
           <section className="section">
-            <div className="section-head"><h2>Layanan hari ini</h2><Link to="/antrian">Ambil antrian →</Link></div>
-            <div className="svc-grid">
-              {activeServices.map((x) => {
-                const w = tickets.filter((t) => t.service_id === x.id && t.status === 'waiting').length
-                return (
-                  <div className="card svc-card" key={x.id}>
-                    <div className="svc-top"><span className="svc-code">{x.code}</span><h3>{x.name}</h3></div>
-                    {x.description && <p className="muted">{x.description}</p>}
-                    <div className="svc-stats"><span><b>{w}</b> menunggu</span><span>±<b>{x.est_minutes}</b> menit/orang</span></div>
+            <div className="section-head"><h2>Instansi & layanan hari ini</h2><Link to="/antrian">Ambil antrian →</Link></div>
+            <div className="ag-sections">
+              {groups.map(({ agency, services: list }) => (
+                <div className="card ag-block" key={agency.id}>
+                  <div className="ag-head">
+                    <AgencyLogo agency={agency} size={52} />
+                    <h3>{agency.name}</h3>
                   </div>
-                )
-              })}
+                  <ul className="ag-svc-list">
+                    {list.map((x) => {
+                      const w = tickets.filter((t) => t.service_id === x.id && t.status === 'waiting').length
+                      return (
+                        <li key={x.id}>
+                          <span className="svc-code">{x.code}</span>
+                          <span className="ag-svc-name"><b>{x.name}</b>{x.description && <small className="muted">{x.description}</small>}</span>
+                          <span className="ag-svc-wait"><b>{w}</b><small>menunggu</small></span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
             </div>
           </section>
         )}

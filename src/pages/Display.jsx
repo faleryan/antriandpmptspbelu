@@ -5,6 +5,8 @@ import { useQueue } from '../hooks/useQueue'
 import PromoPlayer from '../components/PromoPlayer.jsx'
 import { Brand } from '../components/PublicLayout.jsx'
 import { TZ } from '../lib/util'
+import { agencyOf } from '../lib/agency'
+import AgencyLogo from '../components/AgencyLogo.jsx'
 
 const speak = (text) => new Promise((resolve) => {
   if (!('speechSynthesis' in window)) return resolve()
@@ -34,7 +36,7 @@ const chime = (ctx) => new Promise((resolve) => {
 // Layar antrian untuk TV/komputer loket (promoOnly = hanya promosi, bisa dibuka online).
 export default function Display({ promoOnly = false }) {
   const { settings: s } = useSettings()
-  const { tickets, counters, loading } = useQueue()
+  const { tickets, counters, services, agencies, loading } = useQueue()
   const [promo, setPromo] = useState([])
   const [sound, setSound] = useState(false)
   const [now, setNow] = useState(new Date())
@@ -69,6 +71,7 @@ export default function Display({ promoOnly = false }) {
       const c = counters.find((x) => x.id === t.counter_id)
       const letters = t.code.split('-')[0].split('').join(' ')
       const text = `Nomor antrian ${letters} ${t.seq}, silakan menuju ${c?.name || 'loket'}`
+
       chain.current = chain.current.then(() => chime(ctxRef.current)).then(() => speak(text))
     })
   }, [tickets, loading])
@@ -90,6 +93,8 @@ export default function Display({ promoOnly = false }) {
     .sort((a, b) => new Date(b.called_at) - new Date(a.called_at))
   const latest = calling[0]
   const latestCounter = latest && counters.find((c) => c.id === latest.counter_id)
+  const latestAgency = latest && agencyOf(services.find((x) => x.id === latest.service_id), agencies)
+  const svcOf = (t) => services.find((x) => x.id === t.service_id)
   const waiting = tickets.filter((t) => t.status === 'waiting')
   const current = (c) => calling.find((t) => t.counter_id === c.id)
 
@@ -107,7 +112,9 @@ export default function Display({ promoOnly = false }) {
         {!promoOnly && (
           <section className="tv-queue" aria-live="polite">
             <div key={flash} className={'tv-now' + (flash ? ' flash' : '')}>
-              <small>Nomor dipanggil</small>
+              {latestAgency ? (
+                <div className="tv-now-agency"><AgencyLogo agency={latestAgency} size={52} /><span>{latestAgency.name}</span></div>
+              ) : <small>Nomor dipanggil</small>}
               <div className="tv-now-code">{latest ? latest.code : '—'}</div>
               <div className="tv-now-counter">{latest ? (latestCounter?.name || 'Loket') : 'Menunggu panggilan'}</div>
             </div>
@@ -118,6 +125,7 @@ export default function Display({ promoOnly = false }) {
                   <div className="tv-counter" key={c.id}>
                     <small>{c.name}</small>
                     <b className={t ? '' : 'idle'}>{t ? t.code : '—'}</b>
+                    {t && <small className="tv-counter-svc">{svcOf(t)?.name}</small>}
                   </div>
                 )
               })}

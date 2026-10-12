@@ -19,6 +19,7 @@ import Posts from './pages/admin/Posts.jsx'
 import Media from './pages/admin/Media.jsx'
 import Settings from './pages/admin/Settings.jsx'
 import Users from './pages/admin/Users.jsx'
+import Reports from './pages/admin/Reports.jsx'
 
 function SetupNotice() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
       <Route path="admin" element={<RequireRole roles={['admin']}><AdminLayout /></RequireRole>}>
         <Route index element={<Overview />} />
         <Route path="layanan" element={<Services />} />
+        <Route path="rekap" element={<Reports />} />
         <Route path="buku-tamu" element={<Guests />} />
         <Route path="berita" element={<Posts />} />
         <Route path="media" element={<Media />} />

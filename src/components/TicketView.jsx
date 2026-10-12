@@ -1,14 +1,21 @@
 import { Link } from 'react-router-dom'
 import { fmtTime, waitingAhead } from '../lib/util'
+import AgencyLogo from './AgencyLogo.jsx'
 
-// Tampilan tiket antrian bergaya karcis (dipakai setelah ambil antrian online & buku tamu).
-export default function TicketView({ ticket, service, tickets = [], showLink = true }) {
+// Tampilan tiket antrian bergaya karcis (setelah ambil antrian online, buku tamu, dan kiosk).
+export default function TicketView({ ticket, service, agency, tickets = [], showLink = true }) {
   if (!ticket) return null
   const ahead = waitingAhead(ticket, tickets)
   const est = service ? ahead * (service.est_minutes || 0) : null
   return (
     <div className="ticket">
       <div className="ticket-top">
+        {agency && (
+          <div className="ticket-agency">
+            <AgencyLogo agency={agency} size={44} />
+            <b>{agency.name}</b>
+          </div>
+        )}
         <span className="ticket-svc">{service?.name || 'Layanan'}</span>
         <div className="ticket-code">{ticket.code}</div>
         <span className="muted">Diambil pukul {fmtTime(ticket.created_at)}</span>

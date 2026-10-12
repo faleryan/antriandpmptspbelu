@@ -4,24 +4,30 @@ import { supabase } from '../../lib/supabase'
 import { useSettings } from '../../context/Settings.jsx'
 import { useQueue } from '../../hooks/useQueue'
 import TicketView from '../../components/TicketView.jsx'
+import AgencyLogo from '../../components/AgencyLogo.jsx'
+import { agencyOf, groupServices } from '../../lib/agency'
 
 const EMPTY = { name: '', institution: '', phone: '', purpose: '', meet_with: '' }
 
 export default function GuestBook() {
   const { settings: s } = useSettings()
-  const { tickets, services } = useQueue()
+  const { tickets, services, agencies } = useQueue()
   const [params] = useSearchParams()
   const source = params.get('src') === 'offline' ? 'offline' : 'online'
   const [f, setF] = useState(EMPTY)
   const [wantTicket, setWantTicket] = useState(true)
+  const [agencyId, setAgencyId] = useState('')
   const [sid, setSid] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [result, setResult] = useState(null)
 
-  const active = services.filter((x) => x.active)
-  useEffect(() => { if (!sid && active[0]) setSid(active[0].id) }, [active.length])
-  const canTicket = (source === 'offline' || s.online_queue_open) && active.length > 0
+  const groups = groupServices(agencies, services)
+  const group = groups.find((g) => g.agency.id === agencyId) || groups[0]
+  useEffect(() => {
+    if (group && !group.services.some((x) => x.id === sid)) setSid(group.services[0]?.id || '')
+  }, [group?.agency.id, group?.services.length])
+  const canTicket = (source === 'offline' || s.online_queue_open) && groups.length > 0
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
   const submit = async (e) => {
@@ -29,7 +35,7 @@ export default function GuestBook() {
     setBusy(true); setErr('')
     const { data, error } = await supabase.rpc('submit_guest', {
       p_name: f.name, p_institution: f.institution, p_phone: f.phone, p_purpose: f.purpose, p_meet_with: f.meet_with,
-      p_service_id: wantTicket && canTicket ? sid : null, p_source: source,
+      p_service_id: wantTicket && canTicket && sid ? sid : null, p_source: source,
     })
     setBusy(false)
     if (error) return setErr(error.message)
@@ -43,7 +49,10 @@ export default function GuestBook() {
       <div className="container">
         <div className="page stack">
           <div className="page-head"><h2>Terima kasih, {f.name.split(' ')[0]}</h2><p>Kunjungan Anda sudah tercatat di buku tamu.</p></div>
-          {t && <TicketView ticket={t} service={services.find((x) => x.id === t.service_id)} tickets={tickets} />}
+          {t && (() => {
+            const svc = services.find((x) => x.id === t.service_id)
+            return <TicketView ticket={t} service={svc} agency={agencyOf(svc, agencies)} tickets={tickets} />
+          })()}
           <div className="row" style={{ justifyContent: 'center' }}>
             <button className="btn btn-ghost" onClick={() => { setResult(null); setF(EMPTY) }}>Isi untuk tamu lain</button>
             <Link className="btn btn-ghost" to="/">Ke beranda</Link>
@@ -80,10 +89,18 @@ export default function GuestBook() {
               <input type="checkbox" checked={wantTicket} onChange={(e) => setWantTicket(e.target.checked)} />
               Sekalian ambil nomor antrian
             </label>
-            {wantTicket && (
-              <select value={sid} onChange={(e) => setSid(e.target.value)} aria-label="Layanan">
-                {active.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}
-              </select>
+            {wantTicket && group && (
+              <div className="stack" style={{ gap: 10 }}>
+                <div className="row" style={{ flexWrap: 'nowrap' }}>
+                  <AgencyLogo agency={group.agency} size={40} />
+                  <select value={group.agency.id} onChange={(e) => setAgencyId(e.target.value)} aria-label="Instansi tujuan">
+                    {groups.map((g) => <option key={g.agency.id} value={g.agency.id}>{g.agency.name}</option>)}
+                  </select>
+                </div>
+                <select value={sid} onChange={(e) => setSid(e.target.value)} aria-label="Jenis layanan">
+                  {group.services.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}
+                </select>
+              </div>
             )}
           </div>
         ) : (

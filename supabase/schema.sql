@@ -54,10 +54,21 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- ---------------------------------------------------------------------
--- 2. LAYANAN, LOKET, TIKET
+-- 2. INSTANSI, LAYANAN, LOKET, TIKET
 -- ---------------------------------------------------------------------
+create table if not exists public.agencies (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  short_name text,
+  logo_url text,
+  sort int not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.services (
   id uuid primary key default gen_random_uuid(),
+  agency_id uuid references public.agencies(id) on delete set null,
   code text not null unique check (char_length(code) between 1 and 3),
   name text not null,
   description text,
@@ -70,7 +81,8 @@ create table if not exists public.services (
 create table if not exists public.counters (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  service_id uuid references public.services(id) on delete set null, -- null = melayani semua layanan
+  agency_id uuid references public.agencies(id) on delete set null,   -- null = semua instansi
+  service_id uuid references public.services(id) on delete set null, -- null = semua layanan (instansi tsb)
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -100,6 +112,8 @@ create table if not exists public.tickets (
   unique (service_id, queue_date, seq)
 );
 create index if not exists tickets_date_status on public.tickets (queue_date, status);
+create index if not exists tickets_date_service on public.tickets (queue_date, service_id);
+create index if not exists services_agency on public.services (agency_id);
 
 -- Data pribadi pengunjung dipisah agar TIDAK ikut tersiar lewat realtime publik.
 create table if not exists public.ticket_visitors (
@@ -217,21 +231,23 @@ end $$;
 -- Operator memanggil nomor berikutnya untuk loketnya.
 create or replace function public.call_next(p_counter_id uuid) returns public.tickets
 language plpgsql security definer set search_path = public as $$
-declare v_date date := public.today_local(); v_sid uuid; v_t public.tickets;
+declare v_date date := public.today_local(); v_sid uuid; v_aid uuid; v_t public.tickets;
 begin
   if not public.is_staff() then raise exception 'Tidak berwenang'; end if;
-  select c.service_id into v_sid from public.counters c where c.id = p_counter_id;
+  select c.service_id, c.agency_id into v_sid, v_aid from public.counters c where c.id = p_counter_id;
 
-  -- Nomor yang masih aktif di loket ini ditutup: sudah dilayani = selesai, belum datang = dilewati.
   update public.tickets
      set status = case when status = 'serving' then 'done' else 'skipped' end,
          finished_at = now()
    where counter_id = p_counter_id and queue_date = v_date and status in ('called','serving');
 
-  select * into v_t from public.tickets
-   where queue_date = v_date and status = 'waiting' and (v_sid is null or service_id = v_sid)
-   order by created_at asc limit 1
-   for update skip locked;
+  select t.* into v_t from public.tickets t
+   where t.queue_date = v_date and t.status = 'waiting'
+     and (v_sid is null or t.service_id = v_sid)
+     and (v_sid is not null or v_aid is null
+          or t.service_id in (select s.id from public.services s where s.agency_id = v_aid))
+   order by t.created_at asc limit 1
+   for update of t skip locked;
   if v_t.id is null then return null; end if;
 
   update public.tickets
@@ -239,16 +255,51 @@ begin
    where id = v_t.id returning * into v_t;
   return v_t;
 end $$;
-
 revoke execute on function public.call_next(uuid) from public, anon;
 grant execute on function public.call_next(uuid) to authenticated;
 grant execute on function public.take_ticket(uuid,text,text,text) to anon, authenticated;
 grant execute on function public.submit_guest(text,text,text,text,text,uuid,text) to anon, authenticated;
 
+-- Rekap layanan per periode (khusus admin)
+--    p_period: 'day' | 'month' | 'quarter' | 'year'
+drop function if exists public.queue_report(text, date, date);
+create or replace function public.queue_report(p_period text, p_from date, p_to date)
+returns table (
+  period_start date, service_id uuid,
+  total bigint, online bigint, offline bigint,
+  done bigint, skipped bigint, cancelled bigint, called bigint,
+  avg_wait_min numeric, avg_serve_min numeric
+)
+language sql stable security definer set search_path = public as $$
+  select
+    date_trunc(p_period, t.queue_date::timestamp)::date as period_start,
+    t.service_id,
+    count(*),
+    count(*) filter (where t.source = 'online'),
+    count(*) filter (where t.source = 'offline'),
+    count(*) filter (where t.status = 'done'),
+    count(*) filter (where t.status = 'skipped'),
+    count(*) filter (where t.status = 'cancelled'),
+    count(t.called_at),
+    round(avg(extract(epoch from (t.called_at - t.created_at)) / 60)::numeric, 1),
+    round((avg(extract(epoch from (t.finished_at - coalesce(t.started_at, t.called_at))) / 60)
+           filter (where t.status = 'done'))::numeric, 1)
+  from public.tickets t
+  where public.is_admin()
+    and p_period in ('day','month','quarter','year')
+    and t.queue_date between p_from and p_to
+  group by 1, 2
+  order by 1, 2
+$$;
+revoke execute on function public.queue_report(text, date, date) from public, anon;
+grant execute on function public.queue_report(text, date, date) to authenticated;
+
+
 -- ---------------------------------------------------------------------
 -- 6. ROW LEVEL SECURITY
 -- ---------------------------------------------------------------------
 alter table public.profiles        enable row level security;
+alter table public.agencies        enable row level security;
 alter table public.services        enable row level security;
 alter table public.counters        enable row level security;
 alter table public.daily_counters  enable row level security;
@@ -270,7 +321,9 @@ end $$;
 create policy profiles_select on public.profiles for select using (id = auth.uid() or public.is_admin());
 create policy profiles_update on public.profiles for update using (public.is_admin()) with check (public.is_admin());
 
--- services & counters: publik boleh baca, admin kelola
+-- instansi, services & counters: publik boleh baca, admin kelola
+create policy agencies_read  on public.agencies for select using (true);
+create policy agencies_admin on public.agencies for all using (public.is_admin()) with check (public.is_admin());
 create policy services_read  on public.services for select using (true);
 create policy services_admin on public.services for all using (public.is_admin()) with check (public.is_admin());
 create policy counters_read  on public.counters for select using (true);
@@ -317,7 +370,7 @@ create policy "media_delete" on storage.objects for delete to authenticated usin
 do $$
 declare t text;
 begin
-  foreach t in array array['tickets','counters','services','promo_media','site_settings']
+  foreach t in array array['tickets','counters','services','agencies','promo_media','site_settings']
   loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', t);
@@ -329,14 +382,28 @@ end $$;
 -- ---------------------------------------------------------------------
 -- 9. DATA AWAL (contoh — ubah dari dashboard admin)
 -- ---------------------------------------------------------------------
-insert into public.services (code, name, description, est_minutes, sort) values
-  ('A','Pelayanan Umum','Informasi dan pendaftaran layanan',10,1),
-  ('B','Pengaduan & Konsultasi','Sampaikan pengaduan atau konsultasi',15,2),
-  ('C','Pengambilan Dokumen','Ambil berkas yang sudah selesai diproses',5,3)
+insert into public.agencies (name, short_name, sort)
+select * from (values
+  ('Dinas Kependudukan dan Pencatatan Sipil','Disdukcapil',1),
+  ('Dinas Penanaman Modal dan PTSP','DPMPTSP',2)
+) v(name, short_name, sort)
+where not exists (select 1 from public.agencies);
+
+insert into public.services (agency_id, code, name, description, est_minutes, sort)
+select a.id, v.code, v.name, v.description, v.est_minutes, v.sort
+from (values
+  ('Disdukcapil','A','Pembuatan Akta Kelahiran','Penerbitan akta kelahiran baru',10,1),
+  ('Disdukcapil','B','Perekaman & Cetak KTP-el','Perekaman biometrik dan pencetakan KTP elektronik',8,2),
+  ('Disdukcapil','C','Kartu Keluarga','Pembuatan baru dan perubahan data KK',10,3),
+  ('DPMPTSP','D','Perizinan Berusaha','Konsultasi dan pendampingan NIB / OSS',15,4),
+  ('DPMPTSP','E','Pengambilan Dokumen Izin','Ambil dokumen izin yang sudah terbit',5,5)
+) v(agency, code, name, description, est_minutes, sort)
+join public.agencies a on a.short_name = v.agency
 on conflict (code) do nothing;
 
-insert into public.counters (name)
-select n from (values ('Loket 1'),('Loket 2')) v(n)
+insert into public.counters (name, agency_id)
+select v.n, a.id from (values ('Loket 1 Disdukcapil','Disdukcapil'),('Loket 2 Disdukcapil','Disdukcapil'),('Loket DPMPTSP','DPMPTSP')) v(n, ag)
+left join public.agencies a on a.short_name = v.ag
 where not exists (select 1 from public.counters);
 
 insert into public.site_settings (key, value) values

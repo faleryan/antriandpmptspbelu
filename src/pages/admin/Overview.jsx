@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useQueue } from '../../hooks/useQueue'
 import { TZ, avg, minutesBetween } from '../../lib/util'
+import { groupServices } from '../../lib/agency'
+import AgencyLogo from '../../components/AgencyLogo.jsx'
 
 const dayKey = (offset) => {
   const d = new Date(Date.now() - offset * 86400000)
@@ -10,7 +12,7 @@ const dayKey = (offset) => {
 }
 
 export default function Overview() {
-  const { tickets, services } = useQueue()
+  const { tickets, services, agencies } = useQueue()
   const [week, setWeek] = useState([])
   const [guestsToday, setGuestsToday] = useState(null)
 
@@ -66,17 +68,22 @@ export default function Overview() {
           <table className="tbl">
             <thead><tr><th>Layanan</th><th>Diambil</th><th>Menunggu</th><th>Selesai</th></tr></thead>
             <tbody>
-              {services.map((x) => {
-                const ts = tickets.filter((t) => t.service_id === x.id)
-                return (
-                  <tr key={x.id}>
-                    <td><b>{x.code}</b> — {x.name}{!x.active && <span className="badge" style={{ marginLeft: 8 }}>nonaktif</span>}</td>
-                    <td>{ts.length}</td>
-                    <td>{ts.filter((t) => t.status === 'waiting').length}</td>
-                    <td>{ts.filter((t) => t.status === 'done').length}</td>
-                  </tr>
-                )
-              })}
+              {groupServices(agencies, services, { activeOnly: false }).map((g) => [
+                <tr key={g.agency.id} className="ag-row">
+                  <td colSpan={4}><span className="ag-cell"><AgencyLogo agency={g.agency} size={24} />{g.agency.name}</span></td>
+                </tr>,
+                ...g.services.map((x) => {
+                  const ts = tickets.filter((t) => t.service_id === x.id)
+                  return (
+                    <tr key={x.id}>
+                      <td style={{ paddingLeft: 24 }}><b>{x.code}</b> — {x.name}{!x.active && <span className="badge" style={{ marginLeft: 8 }}>nonaktif</span>}</td>
+                      <td>{ts.length}</td>
+                      <td>{ts.filter((t) => t.status === 'waiting').length}</td>
+                      <td>{ts.filter((t) => t.status === 'done').length}</td>
+                    </tr>
+                  )
+                }),
+              ])}
             </tbody>
           </table>
         </div>
@@ -85,7 +92,8 @@ export default function Overview() {
       <div className="panel">
         <h3>Pintasan</h3>
         <div className="row">
-          <Link className="btn btn-primary" to="/admin/pengaturan">Atur tampilan situs publik</Link>
+          <Link className="btn btn-primary" to="/admin/rekap">Lihat rekap layanan</Link>
+          <Link className="btn btn-ghost" to="/admin/pengaturan">Atur tampilan situs publik</Link>
           <Link className="btn btn-ghost" to="/admin/media">Kelola media promosi</Link>
           <Link className="btn btn-ghost" to="/admin/berita">Tulis berita</Link>
         </div>

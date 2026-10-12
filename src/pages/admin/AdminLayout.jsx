@@ -5,7 +5,8 @@ import { Brand } from '../../components/PublicLayout.jsx'
 
 const NAV = [
   ['/admin', 'Ringkasan', true],
-  ['/admin/layanan', 'Layanan & loket'],
+  ['/admin/rekap', 'Rekap layanan'],
+  ['/admin/layanan', 'Instansi & layanan'],
   ['/admin/buku-tamu', 'Buku tamu'],
   ['/admin/berita', 'Berita'],
   ['/admin/media', 'Media promosi'],

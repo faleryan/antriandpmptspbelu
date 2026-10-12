@@ -5,11 +5,13 @@ import { useAuth } from '../../context/Auth.jsx'
 import { useSettings } from '../../context/Settings.jsx'
 import { useQueue } from '../../hooks/useQueue'
 import { STATUS, visitorOf, minsAgo, minutesBetween, avg, fmtTime } from '../../lib/util'
+import { agencyOf, groupServices } from '../../lib/agency'
+import AgencyLogo from '../../components/AgencyLogo.jsx'
 
 export default function Operator() {
   const { profile, role, signOut } = useAuth()
   const { settings: s } = useSettings()
-  const { tickets, services, counters, loading, reload } = useQueue({ staff: true })
+  const { tickets, services, counters, agencies, loading, reload } = useQueue({ staff: true })
   const [counterId, setCounterId] = useState(() => { try { return localStorage.getItem('counterId') || '' } catch { return '' } })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -17,6 +19,7 @@ export default function Operator() {
 
   const activeCounters = counters.filter((c) => c.active)
   const activeServices = services.filter((x) => x.active)
+  const groups = groupServices(agencies, services)
 
   useEffect(() => {
     if (loading) return
@@ -32,8 +35,18 @@ export default function Operator() {
   const counter = counters.find((c) => c.id === counterId)
   const mine = tickets.find((t) => t.counter_id === counterId && ['called', 'serving'].includes(t.status))
   const mySvc = mine && services.find((x) => x.id === mine.service_id)
-  const waiting = tickets.filter((t) => t.status === 'waiting' && (!counter?.service_id || t.service_id === counter.service_id))
-  const svcName = (id) => services.find((x) => x.id === id)?.name || ''
+  const svcOf = (id) => services.find((x) => x.id === id)
+  const svcName = (id) => svcOf(id)?.name || ''
+  const agName = (id) => agencies.find((a) => a.id === id)?.short_name || agencies.find((a) => a.id === id)?.name || ''
+  const servesTicket = (t) => {
+    if (!counter) return true
+    if (counter.service_id) return t.service_id === counter.service_id
+    if (counter.agency_id) return svcOf(t.service_id)?.agency_id === counter.agency_id
+    return true
+  }
+  const waiting = tickets.filter((t) => t.status === 'waiting' && servesTicket(t))
+  const counterLabel = (c) => c.service_id ? svcName(c.service_id) : c.agency_id ? `semua layanan ${agName(c.agency_id)}` : 'semua layanan'
+  const myAgency = counter?.agency_id ? agencies.find((a) => a.id === counter.agency_id) : null
 
   const total = tickets.length
   const waitingAll = tickets.filter((t) => t.status === 'waiting').length
@@ -91,7 +104,7 @@ export default function Operator() {
         <label className="row" style={{ gap: 6 }}>
           <span style={{ color: '#9fb4c6' }}>Loket</span>
           <select value={counterId} onChange={(e) => setCounterId(e.target.value)} aria-label="Pilih loket">
-            {activeCounters.map((c) => <option key={c.id} value={c.id}>{c.name}{c.service_id ? ` · ${svcName(c.service_id)}` : ' · semua layanan'}</option>)}
+            {activeCounters.map((c) => <option key={c.id} value={c.id}>{c.name} · {counterLabel(c)}</option>)}
           </select>
         </label>
         <Link className="btn btn-sm btn-ghost" to="/display" target="_blank">Layar antrian</Link>
@@ -102,7 +115,10 @@ export default function Operator() {
       <div className="op-body">
         <div className="stack">
           <div className="card op-current" aria-live="polite">
-            <span className="muted">{counter ? counter.name : 'Pilih loket terlebih dahulu'}</span>
+            <div className="row" style={{ justifyContent: 'center' }}>
+              {(mine || myAgency) && <AgencyLogo agency={mine ? agencyOf(mySvc, agencies) : myAgency} size={36} />}
+              <span className="muted">{counter ? `${counter.name} · ${counterLabel(counter)}` : 'Pilih loket terlebih dahulu'}</span>
+            </div>
             <div className={'op-code' + (mine ? '' : ' idle')}>{mine ? mine.code : '—'}</div>
             {mine ? (
               <>
@@ -148,7 +164,11 @@ export default function Operator() {
             <h3>Tambah nomor untuk tamu langsung</h3>
             <div className="row">
               <select style={{ flex: 1, minWidth: 140 }} value={walk.sid} onChange={(e) => setWalk({ ...walk, sid: e.target.value })} aria-label="Layanan">
-                {activeServices.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}
+                {groups.map((g) => (
+                  <optgroup key={g.agency.id} label={g.agency.name}>
+                    {g.services.map((x) => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}
+                  </optgroup>
+                ))}
               </select>
               <input style={{ flex: 1, minWidth: 140 }} value={walk.name} onChange={(e) => setWalk({ ...walk, name: e.target.value })} placeholder="Nama (opsional)" aria-label="Nama tamu" />
               <button className="btn btn-primary" disabled={busy || !walk.sid}>Buat nomor</button>
@@ -167,7 +187,7 @@ export default function Operator() {
                   <span className="qc">{t.code}</span>
                   <div>
                     <b>{vv.visitor_name || 'Tanpa nama'}</b>
-                    <small>{svcName(t.service_id)} · {minsAgo(t.created_at)} menit lalu · <span className={`badge badge-${t.source}`}>{t.source}</span></small>
+                    <small>{agencyOf(svcOf(t.service_id), agencies).short_name || agencyOf(svcOf(t.service_id), agencies).name} · {svcName(t.service_id)} · {minsAgo(t.created_at)} menit lalu · <span className={`badge badge-${t.source}`}>{t.source}</span></small>
                   </div>
                   <div className="row" style={{ gap: 4 }}>
                     <button className="btn btn-sm btn-ghost" disabled={busy || !!mine || !counterId} onClick={() => callSpecific(t)}>Panggil</button>
